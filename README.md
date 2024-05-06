@@ -1,4 +1,4 @@
-# proyectofirebase
+# PROYECTOFIREBASE
 
 Gestión de stock - Espinosa/Schmidt
 
