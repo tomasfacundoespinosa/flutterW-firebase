@@ -5,124 +5,22 @@ import 'package:proyectofirebase/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options:DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
 class Producto {
   final String nombre;
-  final double precio;
-  final int cantidad;
+  double precio;
+  int cantidad;
+  final String categoria;
 
-  const Producto({
+  Producto({
     required this.nombre,
     required this.precio,
     required this.cantidad,
+    required this.categoria,
   });
-
-  // Add a method to convert the product to a Map for Firestore
-  Map<String, dynamic> toMap() {
-    return {
-      'nombre': nombre,
-      'precio': precio,
-      'cantidad': cantidad,
-    };
-  }
-}
-
-Future<void> agregarProducto(BuildContext context) async {
-  final _formKey = GlobalKey<FormState>();
-  String nombreProducto = "";
-  double precioProducto = 0.0;
-  int cantidadProducto = 0;
-
-  return showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: const Text('Agregar Producto'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                TextFormField(
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingrese el nombre del producto.';
-                    }
-                    return null;
-                  },
-                  decoration: const InputDecoration(
-                    hintText: 'Nombre del Producto',
-                  ),
-                  onChanged: (value) => nombreProducto = value,
-                ),
-                TextFormField(
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingrese el precio del producto.';
-                    }
-                    return null;
-                  },
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    hintText: 'Precio del Producto',
-                  ),
-                  onChanged: (value) => precioProducto = double.parse(value),
-                ),
-                TextFormField(
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingrese la cantidad inicial.';
-                    }
-                    return null;
-                  },
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    hintText: 'Cantidad Inicial',
-                  ),
-                  onChanged: (value) => cantidadProducto = int.parse(value),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (_formKey.currentState!.validate()) {
-                // Add product to Firestore
-                await _guardarProductoEnFirestore(
-                  Producto(
-                    nombre: nombreProducto,
-                    precio: precioProducto,
-                    cantidad: cantidadProducto,
-                  ),
-                );
-                // Show success message or navigate back
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Agregar'),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-Future<void> _guardarProductoEnFirestore(Producto producto) async {
-  // Create a reference to the products collection
-  final firebase = FirebaseFirestore.instance;
-
-  // Add the product data to the collection
-  await firebase.collection('productos').add(producto.toMap());
 }
 
 class MyApp extends StatelessWidget {
@@ -143,54 +41,292 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({Key? key, required this.title}) : super(key: key);
   final String title;
+
+  const MyHomePage({Key? key, required this.title}) : super(key: key);
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  final TextEditingController _searchController = TextEditingController();
+  late List<Producto> _productos = [];
 
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
+  @override
+  void initState() {
+    super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-
-      //APPBAR
-
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
-
-      //BODY
-
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                labelText: 'Buscar por nombre o categoría',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                setState(() {}); // Actualizar la interfaz al cambiar el texto de búsqueda
+              },
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _productos.length,
+              itemBuilder: (context, index) {
+                final producto = _productos[index];
+                // Filtrar productos por nombre y categoría
+                final bool matchesSearch = producto.nombre.toLowerCase().contains(_searchController.text.toLowerCase()) ||
+                    producto.categoria.toLowerCase().contains(_searchController.text.toLowerCase());
+                if (!matchesSearch) {
+                  return Container(); // Si no hay coincidencias, no mostrar este elemento
+                }
+                return ListTile(
+                  title: Text(producto.nombre),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Precio: \$${producto.precio.toStringAsFixed(2)}'),
+                      Text('Cantidad: ${producto.cantidad}'),
+                      Text('Categoría: ${producto.categoria}'),
+                    ],
+                  ),
+                  trailing: IconButton(
+                    icon: Icon(Icons.delete),
+                    onPressed: () => _eliminarProducto(index),
+                  ),
+                  onTap: () => _editarProducto(context, index),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _agregarProducto(context),
+        label: const Text('Agregar Producto'),
+        icon: const Icon(Icons.add),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  Future<void> _agregarProducto(BuildContext context) async {
+    final _formKey = GlobalKey<FormState>();
+    String nombreProducto = "";
+    double precioProducto = 0.0;
+    int cantidadProducto = 0;
+    String categoriaProducto = "";
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Agregar Producto'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TextFormField(
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingrese el nombre del producto.';
+                      }
+                      return null;
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'Nombre del Producto',
+                    ),
+                    onChanged: (value) => nombreProducto = value,
+                  ),
+                  TextFormField(
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingrese el precio del producto.';
+                      }
+                      return null;
+                    },
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: 'Precio del Producto',
+                    ),
+                    onChanged: (value) => precioProducto = double.parse(value),
+                  ),
+                  TextFormField(
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingrese la cantidad inicial.';
+                      }
+                      return null;
+                    },
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: 'Cantidad Inicial',
+                    ),
+                    onChanged: (value) => cantidadProducto = int.parse(value),
+                  ),
+                  TextFormField(
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingrese la categoría del producto.';
+                      }
+                      return null;
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'Categoría del Producto',
+                    ),
+                    onChanged: (value) => categoriaProducto = value,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (_formKey.currentState!.validate()) {
+                  setState(() {
+                    _productos.add(Producto(
+                      nombre: nombreProducto,
+                      precio: precioProducto,
+                      cantidad: cantidadProducto,
+                      categoria: categoriaProducto,
+                    ));
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Agregar'),
             ),
           ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => agregarProducto(context),
-        tooltip: 'Agregar Producto',
-        child: const Icon(Icons.add),
-      ),
+        );
+      },
+    );
+  }
+
+  void _eliminarProducto(int index) {
+    setState(() {
+      _productos.removeAt(index);
+    });
+  }
+
+  void _editarProducto(BuildContext context, int index) async {
+    final _formKey = GlobalKey<FormState>();
+    String nombreProducto = _productos[index].nombre;
+    double precioProducto = _productos[index].precio;
+    int cantidadProducto = _productos[index].cantidad;
+    String categoriaProducto = _productos[index].categoria;
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Editar Producto'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TextFormField(
+                    initialValue: nombreProducto,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingrese el nombre del producto.';
+                      }
+                      return null;
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'Nombre del Producto',
+                    ),
+                    onChanged: (value) => nombreProducto = value,
+                  ),
+                  TextFormField(
+                    initialValue: precioProducto.toString(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingrese el precio del producto.';
+                      }
+                      return null;
+                    },
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: 'Precio del Producto',
+                    ),
+                    onChanged: (value) => precioProducto = double.parse(value),
+                  ),
+                  TextFormField(
+                    initialValue: cantidadProducto.toString(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingrese la cantidad inicial.';
+                      }
+                      return null;
+                    },
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      hintText: 'Cantidad Inicial',
+                    ),
+                    onChanged: (value) => cantidadProducto = int.parse(value),
+                  ),
+                  TextFormField(
+                    initialValue: categoriaProducto,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Por favor ingrese la categoría del producto.';
+                      }
+                      return null;
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'Categoría del Producto',
+                    ),
+                    onChanged: (value) => categoriaProducto = value,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (_formKey.currentState!.validate()) {
+                  setState(() {
+                    _productos[index] = Producto(
+                      nombre: nombreProducto,
+                      precio: precioProducto,
+                      cantidad: cantidadProducto,
+                      categoria: categoriaProducto,
+                    );
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
+
